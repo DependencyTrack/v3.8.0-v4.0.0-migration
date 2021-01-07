@@ -352,6 +352,69 @@ DROP TABLE `COMPONENTMETRICS`;
 DROP TABLE `CPEREFERENCE`;
 
 
+-- Find dangling components that no project depends on anymore and remove them
+
+DELIMITER $$
+
+CREATE PROCEDURE cleanup_components()
+BEGIN
+    DECLARE v_component_id BIGINT(20);
+    DECLARE v_done BIT DEFAULT FALSE;
+
+    DECLARE component_cursor CURSOR FOR
+        SELECT c.`ID`
+        FROM `COMPONENT` c
+        WHERE (SELECT COUNT(*) FROM `DEPENDENCY` d WHERE c.`ID` = d.`COMPONENT_ID`) = 0;
+    
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = TRUE;
+
+    OPEN component_cursor;
+
+    component_loop: LOOP
+        FETCH component_cursor INTO v_component_id;
+
+        IF v_done THEN
+            LEAVE component_loop;
+        END IF;
+
+        IF v_component_id IS NOT NULL THEN
+            DELETE ac 
+            FROM `ANALYSISCOMMENT` ac 
+                LEFT JOIN `ANALYSIS` a ON ac.`ANALYSIS_ID` = a.`ID` 
+            WHERE a.`COMPONENT_ID` = v_component_id;
+
+            DELETE a 
+            FROM `ANALYSIS` a 
+            WHERE a.`COMPONENT_ID` = v_component_id;
+
+            DELETE cv
+            FROM `COMPONENTS_VULNERABILITIES` cv
+            WHERE cv.`COMPONENT_ID` = v_component_id;
+
+            DELETE dm 
+            FROM `DEPENDENCYMETRICS` dm 
+            WHERE dm.`COMPONENT_ID` = v_component_id;
+
+            DELETE sc
+            FROM `SCANS_COMPONENTS` sc
+            WHERE sc.`COMPONENT_ID` = v_component_id;
+
+            DELETE c 
+            FROM `COMPONENT` c 
+            WHERE c.`ID` = v_component_id;
+        END IF;
+    END LOOP;
+
+    CLOSE component_cursor;
+END$$
+
+DELIMITER ;
+
+CALL cleanup_components();
+
+DROP PROCEDURE cleanup_components;
+
+
 -- Updating the COMPONENT table's rows to match the new structure.
 -- This includes the multiplication of the components for each applicable project.
 
@@ -517,46 +580,6 @@ ALTER TABLE `COMPONENT`
     ADD CONSTRAINT `COMPONENT_FK3` FOREIGN KEY (`LICENSE_ID`) REFERENCES `LICENSE` (`ID`);
 
 
-
-DELIMITER $$
-
--- Delete ANALYSIS and associated ANALYSISCOMMENT rows that reference nonexistent components
-CREATE PROCEDURE cleanup_analysis()
-BEGIN
-    DECLARE v_analysis_id BIGINT(20);
-    DECLARE v_done BIT DEFAULT FALSE;
-
-    DECLARE analysis_cursor CURSOR FOR
-        SELECT a.`ID`
-        FROM `ANALYSIS` a
-        WHERE (SELECT COUNT(*) FROM `COMPONENT` c WHERE c.`ID` = a.`COMPONENT_ID`) = 0;
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = TRUE;
-
-    OPEN analysis_cursor;
-
-    analysis_loop: LOOP
-        FETCH analysis_cursor INTO v_analysis_id;
-
-        IF v_done THEN
-            LEAVE analysis_loop;
-        END IF;
-
-        IF v_analysis_id IS NOT NULL THEN
-            DELETE ac FROM `ANALYSISCOMMENT` ac WHERE ac.`ANALYSIS_ID` = v_analysis_id;
-            DELETE a FROM `ANALYSIS` a WHERE a.`ID` = v_analysis_id;
-        END IF;
-    END LOOP;
-
-    CLOSE analysis_cursor;
-END$$
-
-DELIMITER ;
-
-CALL cleanup_analysis();
-
-DROP PROCEDURE cleanup_analysis;
-
-
 ALTER TABLE `ANALYSIS` ADD CONSTRAINT `ANALYSIS_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
 
 DROP TABLE `COMPONENTS_VULNERABILITIES`;
@@ -567,14 +590,12 @@ ALTER TABLE `COMPONENTS_VULNERABILITIES`
     ADD CONSTRAINT `COMPONENTS_VULNERABILITIES_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`),
     ADD CONSTRAINT `COMPONENTS_VULNERABILITIES_FK2` FOREIGN KEY (`VULNERABILITY_ID`) REFERENCES `VULNERABILITY` (`ID`);
 
-DELETE dm FROM `DEPENDENCYMETRICS` dm WHERE (SELECT COUNT(*) FROM `COMPONENT` c WHERE c.`ID` = dm.`COMPONENT_ID`) = 0;
 ALTER TABLE `DEPENDENCYMETRICS` ADD CONSTRAINT `DEPENDENCYMETRICS_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
 
 ALTER TABLE `FINDINGATTRIBUTION` ADD CONSTRAINT `FINDINGATTRIBUTION_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
 
 ALTER TABLE `POLICYVIOLATION` ADD CONSTRAINT `POLICYVIOLATION_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
 
-DELETE sc FROM `SCANS_COMPONENTS` sc WHERE (SELECT COUNT(*) FROM `COMPONENT` c WHERE c.`ID` = sc.`COMPONENT_ID`) = 0;
 ALTER TABLE `SCANS_COMPONENTS` ADD CONSTRAINT `SCANS_COMPONENTS_FK2` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
 
 ALTER TABLE `VIOLATIONANALYSIS` ADD CONSTRAINT `VIOLATIONANALYSIS_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
