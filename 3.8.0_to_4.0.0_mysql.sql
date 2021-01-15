@@ -383,25 +383,11 @@ BEGIN
                 LEFT JOIN `ANALYSIS` a ON ac.`ANALYSIS_ID` = a.`ID` 
             WHERE a.`COMPONENT_ID` = v_component_id;
 
-            DELETE a 
-            FROM `ANALYSIS` a 
-            WHERE a.`COMPONENT_ID` = v_component_id;
-
-            DELETE cv
-            FROM `COMPONENTS_VULNERABILITIES` cv
-            WHERE cv.`COMPONENT_ID` = v_component_id;
-
-            DELETE dm 
-            FROM `DEPENDENCYMETRICS` dm 
-            WHERE dm.`COMPONENT_ID` = v_component_id;
-
-            DELETE sc
-            FROM `SCANS_COMPONENTS` sc
-            WHERE sc.`COMPONENT_ID` = v_component_id;
-
-            DELETE c 
-            FROM `COMPONENT` c 
-            WHERE c.`ID` = v_component_id;
+            DELETE FROM `ANALYSIS` WHERE `COMPONENT_ID` = v_component_id;
+            DELETE FROM `COMPONENTS_VULNERABILITIES` WHERE `COMPONENT_ID` = v_component_id;
+            DELETE FROM `DEPENDENCYMETRICS` WHERE `COMPONENT_ID` = v_component_id;
+            DELETE FROM `SCANS_COMPONENTS` WHERE `COMPONENT_ID` = v_component_id;
+            DELETE FROM `COMPONENT` WHERE `ID` = v_component_id;
         END IF;
     END LOOP;
 
