@@ -307,6 +307,9 @@ SET `POLICYVIOLATIONS_AUDITED` = 0,
     `POLICYVIOLATIONS_WARN` = 0;
 
 
+ALTER TABLE `SCANS_COMPONENTS`
+    DROP FOREIGN KEY `SCANS_COMPONENTS_FK2`;
+
 
 CREATE TABLE `VIOLATIONANALYSIS` (
     `ID` bigint(20) NOT NULL AUTO_INCREMENT,
@@ -347,6 +350,56 @@ DROP TABLE `COMPONENTMETRICS`;
 
 
 DROP TABLE `CPEREFERENCE`;
+
+
+-- Find dangling components that no project depends on anymore and remove them
+
+DELIMITER $$
+
+CREATE PROCEDURE cleanup_components()
+BEGIN
+    DECLARE v_component_id BIGINT(20);
+    DECLARE v_done BIT DEFAULT FALSE;
+
+    DECLARE component_cursor CURSOR FOR
+        SELECT c.`ID`
+        FROM `COMPONENT` c
+        LEFT JOIN `DEPENDENCY` d ON c.`ID` = d.`COMPONENT_ID`
+        WHERE d.`COMPONENT_ID` IS NULL;
+    
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = TRUE;
+
+    OPEN component_cursor;
+
+    component_loop: LOOP
+        FETCH component_cursor INTO v_component_id;
+
+        IF v_done THEN
+            LEAVE component_loop;
+        END IF;
+
+        IF v_component_id IS NOT NULL THEN
+            DELETE ac 
+            FROM `ANALYSISCOMMENT` ac 
+                LEFT JOIN `ANALYSIS` a ON ac.`ANALYSIS_ID` = a.`ID` 
+            WHERE a.`COMPONENT_ID` = v_component_id;
+
+            DELETE FROM `ANALYSIS` WHERE `COMPONENT_ID` = v_component_id;
+            DELETE FROM `COMPONENTS_VULNERABILITIES` WHERE `COMPONENT_ID` = v_component_id;
+            DELETE FROM `DEPENDENCYMETRICS` WHERE `COMPONENT_ID` = v_component_id;
+            DELETE FROM `SCANS_COMPONENTS` WHERE `COMPONENT_ID` = v_component_id;
+            DELETE FROM `COMPONENT` WHERE `ID` = v_component_id;
+        END IF;
+    END LOOP;
+
+    CLOSE component_cursor;
+END$$
+
+DELIMITER ;
+
+CALL cleanup_components();
+
+DROP PROCEDURE cleanup_components;
 
 
 -- Updating the COMPONENT table's rows to match the new structure.
@@ -513,6 +566,7 @@ ALTER TABLE `COMPONENT`
     ADD CONSTRAINT `COMPONENT_FK2` FOREIGN KEY (`PROJECT_ID`) REFERENCES `PROJECT` (`ID`),
     ADD CONSTRAINT `COMPONENT_FK3` FOREIGN KEY (`LICENSE_ID`) REFERENCES `LICENSE` (`ID`);
 
+
 ALTER TABLE `ANALYSIS` ADD CONSTRAINT `ANALYSIS_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
 
 DROP TABLE `COMPONENTS_VULNERABILITIES`;
@@ -529,6 +583,67 @@ ALTER TABLE `FINDINGATTRIBUTION` ADD CONSTRAINT `FINDINGATTRIBUTION_FK1` FOREIGN
 
 ALTER TABLE `POLICYVIOLATION` ADD CONSTRAINT `POLICYVIOLATION_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
 
+ALTER TABLE `SCANS_COMPONENTS` ADD CONSTRAINT `SCANS_COMPONENTS_FK2` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
+
 ALTER TABLE `VIOLATIONANALYSIS` ADD CONSTRAINT `VIOLATIONANALYSIS_FK1` FOREIGN KEY (`COMPONENT_ID`) REFERENCES `COMPONENT` (`ID`);
 
 DROP TABLE `DEPENDENCY`;
+
+UPDATE `SCHEMAVERSION` SET `VERSION` = '4.0.0' WHERE `ID` = 1;
+
+
+-- Fill FINDINGATTRIBUTION table
+
+DELIMITER $$
+
+CREATE PROCEDURE process_findings()
+BEGIN
+    DECLARE v_analyzer_identity VARCHAR(255);
+    DECLARE v_component_id BIGINT(20);
+    DECLARE v_project_id BIGINT(20);
+    DECLARE v_source VARCHAR(255);
+    DECLARE v_vulnerability_id BIGINT(20);
+    DECLARE v_done BIT DEFAULT FALSE;
+
+    DECLARE findings_cursor CURSOR FOR
+        SELECT c.`ID`, c.`PROJECT_ID`, v.`SOURCE`, v.`ID`
+        FROM `COMPONENT` c
+            INNER JOIN `COMPONENTS_VULNERABILITIES` cv ON c.`ID` = cv.`COMPONENT_ID`
+            INNER JOIN `VULNERABILITY` v ON v.`ID` = cv.`VULNERABILITY_ID`;
+        
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = TRUE;
+
+    OPEN findings_cursor;
+
+    findings_loop: LOOP
+        FETCH findings_cursor INTO v_component_id, v_project_id, v_source, v_vulnerability_id;
+
+        IF v_done THEN
+            LEAVE findings_loop;
+        END IF;
+
+        -- Infer analyzer identity based on the vuln's source
+        IF v_source = 'INTERNAL' THEN
+            SET v_analyzer_identity = 'INTERNAL_ANALYZER';
+        ELSEIF v_source = 'NPM' THEN
+            SET v_analyzer_identity = 'NPM_AUDIT_ANALYZER';
+        ELSEIF v_source = 'OSSINDEX' THEN
+            SET v_analyzer_identity = 'OSSINDEX_ANALYZER';
+        ELSEIF v_source = 'VULNDB' THEN
+            SET v_analyzer_identity = 'VULNDB_ANALYZER';
+        ELSE
+            SET v_analyzer_identity = 'NONE';
+        END IF;
+
+        INSERT INTO `FINDINGATTRIBUTION` (`ANALYZERIDENTITY`, `COMPONENT_ID`, `PROJECT_ID`, `UUID`, `VULNERABILITY_ID`)
+        VALUES (v_analyzer_identity, v_component_id, v_project_id, UUID(), v_vulnerability_id);
+    END LOOP;
+
+    CLOSE findings_cursor;
+END$$
+
+DELIMITER ;
+
+CALL process_findings();
+
+DROP PROCEDURE process_findings;
