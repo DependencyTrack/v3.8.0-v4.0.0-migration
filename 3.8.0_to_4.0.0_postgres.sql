@@ -867,3 +867,7 @@ $$;
 SELECT "process_findings"();
 
 DROP FUNCTION "process_findings";
+
+-- Remove deprecated GLOBAL_AUDIT_CHANGE from NOTIFICATIONRULEs
+  
+UPDATE "NOTIFICATIONRULE" SET "NOTIFY_ON" = array_to_string(array_remove(string_to_array("NOTIFY_ON", ','), 'GLOBAL_AUDIT_CHANGE'), ',');
