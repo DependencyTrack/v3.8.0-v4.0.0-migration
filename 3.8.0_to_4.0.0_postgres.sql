@@ -867,3 +867,45 @@ $$;
 SELECT "process_findings"();
 
 DROP FUNCTION "process_findings";
+
+-- Fix the change of ClobColumnMapping to LongVarcharColumnMapping by storing all values in the text columns.
+UPDATE "ANALYSISCOMMENT"
+SET "COMMENT" = ( SELECT convert_from(lo_get("COMMENT"::oid), 'utf8') )
+WHERE "COMMENT" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "COMMENT"::oid );
+
+UPDATE "NOTIFICATIONRULE"
+SET "PUBLISHER_CONFIG" = ( SELECT convert_from(lo_get("PUBLISHER_CONFIG"::oid), 'utf8') )
+WHERE "PUBLISHER_CONFIG" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "PUBLISHER_CONFIG"::oid );
+
+UPDATE "VULNERABILITY"
+SET "DESCRIPTION" = ( SELECT convert_from(lo_get("DESCRIPTION"::oid), 'utf8') )
+WHERE "DESCRIPTION" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "DESCRIPTION"::oid );
+
+UPDATE "VULNERABILITY"
+SET "RECOMMENDATION" = ( SELECT convert_from(lo_get("RECOMMENDATION"::oid), 'utf8') )
+WHERE "RECOMMENDATION" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "RECOMMENDATION"::oid );
+
+UPDATE "VULNERABILITY"
+SET "REFERENCES" = ( SELECT convert_from(lo_get("REFERENCES"::oid), 'utf8') )
+WHERE "REFERENCES" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "REFERENCES"::oid );
+
+UPDATE "VULNERABILITY"
+SET "CREDITS" = ( SELECT convert_from(lo_get("CREDITS"::oid), 'utf8') )
+WHERE "CREDITS" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "CREDITS"::oid );
+
+UPDATE "PERMISSION"
+SET "DESCRIPTION" = ( SELECT convert_from(lo_get("DESCRIPTION"::oid), 'utf8') )
+WHERE "DESCRIPTION" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "DESCRIPTION"::oid );
+
+-- Remove orphaned large objects from the database.
+SELECT 'DO $$ BEGIN
+  PERFORM lo_unlink(oid) FROM pg_largeobject_metadata LIMIT 10000;
+END $$;'
+FROM generate_series(1, (SELECT (count(*) / 10000) + 1 FROM pg_largeobject_metadata)) \gexec
