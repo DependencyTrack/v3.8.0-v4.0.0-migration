@@ -897,12 +897,6 @@ DROP FUNCTION "process_findings";
 -- change columns from OID to text since no OID are used anymore
 -- Fix the change of ClobColumnMapping to LongVarcharColumnMapping by storing all values in the text columns.
 
-ALTER TABLE "DEPENDENCY" ALTER COLUMN "NOTES" TYPE text;
-UPDATE "DEPENDENCY"
-SET "NOTES" = ( SELECT convert_from(lo_get("NOTES"::oid), 'utf8') )
-WHERE "NOTES" ~ '^\d+$'
-    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "NOTES"::oid );
-
 ALTER TABLE "LICENSE" ALTER COLUMN "TEMPLATE" TYPE text;
 UPDATE "LICENSE"
 SET "TEMPLATE" = ( SELECT convert_from(lo_get("TEMPLATE"::oid), 'utf8') )
