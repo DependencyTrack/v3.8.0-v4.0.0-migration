@@ -894,41 +894,86 @@ COMMIT;
 
 DROP FUNCTION "process_findings";
 
+-- change columns from OID to text since no OID are used anymore
 -- Fix the change of ClobColumnMapping to LongVarcharColumnMapping by storing all values in the text columns.
-UPDATE "ANALYSISCOMMENT"
+
+ALTER TABLE "LICENSE" ALTER COLUMN "TEMPLATE" TYPE text;
+UPDATE "LICENSE"
+SET "TEMPLATE" = ( SELECT convert_from(lo_get("TEMPLATE"::oid), 'utf8') )
+WHERE "TEMPLATE" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "TEMPLATE"::oid );
+
+ALTER TABLE "LICENSE" ALTER COLUMN "TEXT" TYPE text;
+UPDATE "LICENSE"
+SET "TEXT" = ( SELECT convert_from(lo_get("TEXT"::oid), 'utf8') )
+WHERE "TEXT" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "TEXT"::oid );
+
+ALTER TABLE "LICENSE" ALTER COLUMN "COMMENT" TYPE text;
+UPDATE "LICENSE"
 SET "COMMENT" = ( SELECT convert_from(lo_get("COMMENT"::oid), 'utf8') )
 WHERE "COMMENT" ~ '^\d+$'
     AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "COMMENT"::oid );
 
+ALTER TABLE "LICENSE" ALTER COLUMN "HEADER" TYPE text;
+UPDATE "LICENSE"
+SET "HEADER" = ( SELECT convert_from(lo_get("HEADER"::oid), 'utf8') )
+WHERE "HEADER" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "HEADER"::oid );
+
+
+ALTER TABLE "NOTIFICATIONPUBLISHER" ALTER COLUMN "TEMPLATE" TYPE text;
+UPDATE "NOTIFICATIONPUBLISHER"
+SET "TEMPLATE" = ( SELECT convert_from(lo_get("TEMPLATE"::oid), 'utf8') )
+WHERE "TEMPLATE" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "TEMPLATE"::oid );
+
+
+ALTER TABLE "NOTIFICATIONRULE" ALTER COLUMN "PUBLISHER_CONFIG" TYPE text;
 UPDATE "NOTIFICATIONRULE"
 SET "PUBLISHER_CONFIG" = ( SELECT convert_from(lo_get("PUBLISHER_CONFIG"::oid), 'utf8') )
 WHERE "PUBLISHER_CONFIG" ~ '^\d+$'
     AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "PUBLISHER_CONFIG"::oid );
-
+    
+ALTER TABLE "PERMISSION" ALTER COLUMN "DESCRIPTION" TYPE text;
+UPDATE "PERMISSION"
+SET "DESCRIPTION" = ( SELECT convert_from(lo_get("DESCRIPTION"::oid), 'utf8') )
+WHERE "DESCRIPTION" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "DESCRIPTION"::oid );
+    
+    
+ALTER TABLE "VULNERABILITY" ALTER COLUMN "DESCRIPTION" TYPE text;
 UPDATE "VULNERABILITY"
 SET "DESCRIPTION" = ( SELECT convert_from(lo_get("DESCRIPTION"::oid), 'utf8') )
 WHERE "DESCRIPTION" ~ '^\d+$'
     AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "DESCRIPTION"::oid );
 
+ALTER TABLE "VULNERABILITY" ALTER COLUMN "RECOMMENDATION" TYPE text;
 UPDATE "VULNERABILITY"
 SET "RECOMMENDATION" = ( SELECT convert_from(lo_get("RECOMMENDATION"::oid), 'utf8') )
 WHERE "RECOMMENDATION" ~ '^\d+$'
     AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "RECOMMENDATION"::oid );
 
+ALTER TABLE "VULNERABILITY" ALTER COLUMN "REFERENCES" TYPE text;
 UPDATE "VULNERABILITY"
 SET "REFERENCES" = ( SELECT convert_from(lo_get("REFERENCES"::oid), 'utf8') )
 WHERE "REFERENCES" ~ '^\d+$'
     AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "REFERENCES"::oid );
 
+
+ALTER TABLE "VULNERABILITY" ALTER COLUMN "CREDITS" TYPE text;
 UPDATE "VULNERABILITY"
 SET "CREDITS" = ( SELECT convert_from(lo_get("CREDITS"::oid), 'utf8') )
 WHERE "CREDITS" ~ '^\d+$'
     AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "CREDITS"::oid );
+    
+ALTER TABLE "ANALYSISCOMMENT" ALTER COLUMN "COMMENT" TYPE text;
+UPDATE "ANALYSISCOMMENT"
+SET "COMMENT" = ( SELECT convert_from(lo_get("COMMENT"::oid), 'utf8') )
+WHERE "COMMENT" ~ '^\d+$'
+    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "COMMENT"::oid );
 
-UPDATE "PERMISSION"
-SET "DESCRIPTION" = ( SELECT convert_from(lo_get("DESCRIPTION"::oid), 'utf8') )
-WHERE "DESCRIPTION" ~ '^\d+$'
-    AND EXISTS ( SELECT oid FROM pg_largeobject_metadata WHERE oid = "DESCRIPTION"::oid );
+
 
 -- Remove orphaned large objects from the database.
 SELECT 'DO $$ BEGIN
